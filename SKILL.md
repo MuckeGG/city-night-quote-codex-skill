@@ -1,16 +1,17 @@
 ---
 name: city-night-quote-codex-skill
-description: Create reusable short-video production packages that combine official-source quotes, local city night scenes, Codex-generated image-gen assets, CapCut narration handoff, subtitles, timelines, and publishing copy. Use when the user asks for a city-night quote video, local landmark motivational content, official-media quote adaptation, CapCut-ready subtitles, or a repeatable AI short-video workflow.
+description: Create reusable city-night quote videos with verified official-source excerpts, local landmark image-gen assets, subtitles, timelines, publishing copy, and directly generated editable Jianying drafts. Use when the user asks for a city-night quote video, local landmark motivational content, official-media quote adaptation, Jianying/CapCut-ready drafts or subtitles, or a repeatable AI short-video workflow.
 ---
 
 # 城市夜读短视频制作
 
-将“官方来源金句 + 本地城市夜景/地标 + 剪映配音 + Codex字幕”拆成可复用的分阶段内容包。默认制作25–35秒竖屏视频；若用户指定时长，以用户指定值为准。
+将“官方来源金句 + 本地城市夜景/地标 + 剪映配音 + Codex字幕”生成内容包和可编辑剪映草稿。默认制作25–35秒竖屏视频；若用户指定时长，以用户指定值为准。
 
 ## 交付边界
 
 - 在 Codex 中完成选题、来源核对、脚本、分镜、图片提示词、image-gen生图、字幕、时间轴和发布文案。
-- 将配音和BGM留在剪映：输出连续旁白稿、导入用SRT、图片时间轴和剪映交接清单，不代替用户在剪映中生成声音。
+- 默认直接写入剪映草稿目录，创建9:16可编辑草稿。草稿必须含画面轨、连续旁白文本轨、屏幕字幕轨和空BGM轨。
+- 将配音和BGM留在剪映：连续旁白轨供用户执行文本朗读，BGM轨供用户添加剪映内授权音乐。不要在 Codex 中伪造剪映配音。
 - 使用内置 `image_gen` 生成位图素材；每个关键镜头单独生成并保存到当前内容包的 `assets/` 目录。不要改用外部API或自行编写图片生成客户端。
 - 不生成冒充人民日报、央视新闻或播音员的Logo、台标、声音、新闻包装或官方背书。
 
@@ -26,8 +27,8 @@ description: Create reusable short-video production packages that combine offici
 6. **图片提示词**：为每个镜头写完整的中文 image-gen prompt，包含主体、动作、环境、镜头、构图、光线、色调、竖屏画幅和负面约束。输出 `image-prompts.md`。
 7. **image-gen**：调用内置 `image_gen`，逐镜头生成图片。保持同一城市、地标特征、季节、时间段和视觉风格一致；避免图片出现文字、字幕、Logo、水印或伪造的实时新闻信息。生成后检查并把最终图片保存到 `assets/shot-XX.png`。
 8. **字幕与时间轴**：使用 `scripts/build_subtitles.py` 根据旁白和目标时长生成初版 `subtitles.srt`、`timeline.csv` 和 `timeline.json`。字幕按自然句意分段，不按每个镜头机械断句。
-9. **剪映交接**：输出 `capcut_handoff.md`，明确导入顺序、图片时长、旁白文本、SRT导入、BGM音量和AI生成标识。配音完成后，若用户提供校准后的 `timings.json`，再次运行字幕脚本生成精确SRT。
-10. **验收**：运行 `scripts/validate_content_package.py`。来源缺失、旁白与字幕不一致、时长越界、SRT时间码错误、缺少AI标识或图片缺失时，先修复再交付。
+9. **剪映草稿**：读取 `references/jianying-draft.md`，运行 `scripts/create_jianying_draft.py`，将草稿直接写入本机剪映草稿目录。不要通过界面逐张导入和手工剪辑。输出 `jianying_draft.json`，并保留 `capcut_handoff.md` 作为人工交接备份。
+10. **验收**：运行 `scripts/validate_content_package.py`，再检查草稿的画布为1080×1920、总时长正确、视频段数量等于去重后的 `shot_id` 数、字幕段数量等于时间轴条目数。若本机装有剪映，确认首页能看到草稿标题；不要为了验证而手工重建时间线。
 
 ## 固定输出结构
 
@@ -45,6 +46,8 @@ outputs/<city>-<date>-<slug>/
 ├── source-ledger.csv
 ├── publish-copy.md
 ├── capcut_handoff.md
+├── jianying_draft.json
+├── jianying_assets/
 └── assets/
 ```
 
@@ -68,4 +71,5 @@ outputs/<city>-<date>-<slug>/
 - 读取 `references/workflow-source-map.md` 了解迁移自 today-dungeon-studio 的阶段、数据对象和真实音频校准思路。
 - 读取 `references/storyboard-and-imagegen.md` 生成城市夜景分镜和 image-gen 提示词。
 - 读取 `references/source-and-rights.md` 处理官方来源、短摘录、商业化和AI标识。
+- 读取 `references/jianying-draft.md` 直接创建和验证可编辑剪映草稿。
 - 读取 `references/capcut-handoff.md` 生成剪映交接包和可选的真实音频校准输入。
