@@ -11,15 +11,13 @@ import shutil
 import time
 import uuid
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 
-VOICE_TRACK = "01 连续旁白（请在本轨执行文本朗读）"
-SUBTITLE_TRACK = "02 屏幕字幕（不要在本轨配音）"
-BGM_TRACK = "03 舒缓BGM（请在剪映添加）"
+VOICE_TRACK = "01 连续旁白（整段朗读一次）"
+ALIGNED_AUDIO_TRACK = "01 完整旁白（已按真实时长）"
+BGM_TRACK = "03 舒缓BGM（最后添加）"
 VIDEO_TRACK = "画面"
-CHIYUN_LI_BOLD_RESOURCE_ID = "7587347429331176750"
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +25,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--package-dir", type=Path, required=True)
     parser.add_argument("--drafts-dir", type=Path)
     parser.add_argument("--title", required=True)
+    parser.add_argument(
+        "--phase",
+        choices=("voice", "final"),
+        default="voice",
+        help="voice=只生成一条长旁白；final=写入真实旁白音频",
+    )
+    parser.add_argument(
+        "--timeline-file",
+        type=Path,
+        help="可选时间轴；默认使用内容包 timeline.json",
+    )
+    parser.add_argument(
+        "--audio-file",
+        type=Path,
+        help="final 阶段必填：剪映生成的完整旁白音频",
+    )
     parser.add_argument(
         "--platform",
         choices=("auto", "windows", "macos"),
@@ -103,8 +117,11 @@ def validate_title(title: str, target_platform: str) -> None:
         raise ValueError(f"草稿标题含系统不允许的字符：{''.join(found)}")
 
 
-def load_package(package_dir: Path) -> tuple[dict[str, Any], str]:
-    timeline_path = package_dir / "timeline.json"
+def load_package(
+    package_dir: Path,
+    timeline_file: Path | None = None,
+) -> tuple[dict[str, Any], str]:
+    timeline_path = timeline_file or package_dir / "timeline.json"
     narration_path = package_dir / "narration.txt"
     if not timeline_path.exists():
         raise FileNotFoundError(f"缺少时间轴：{timeline_path}")
@@ -165,6 +182,9 @@ def create_draft(
     replace: bool,
     target_platform: str,
     draft_format: str,
+    phase: str,
+    timeline_file: Path | None = None,
+    audio_file: Path | None = None,
 ) -> dict[str, Any]:
     try:
         import pyJianYingDraft as draft
@@ -173,7 +193,9 @@ def create_draft(
             "缺少 pyJianYingDraft==0.3.0；请先安装该固定版本"
         ) from exc
 
-    timeline, narration_text = load_package(package_dir)
+    timeline, narration_text = load_package(package_dir, timeline_file)
+    if phase == "final" and (audio_file is None or not audio_file.exists()):
+        raise FileNotFoundError("final 阶段缺少 --audio-file 完整旁白音频")
     drafts_dir.mkdir(parents=True, exist_ok=True)
     folder = draft.DraftFolder(str(drafts_dir))
     script = folder.create_draft(title, 1080, 1920, allow_replace=replace)
@@ -189,14 +211,17 @@ def create_draft(
     # pyJianYingDraft 0.3.0 always chooses draft_content.json. Override only
     # the save target so the same timeline builder works on both draft formats.
     script.save_path = str(draft_path / content_filename)
-    script.append_tracks(
-        [
-            draft.TrackSpec(draft.TrackType.video, VIDEO_TRACK),
-            draft.TrackSpec(draft.TrackType.text, VOICE_TRACK),
-            draft.TrackSpec(draft.TrackType.text, SUBTITLE_TRACK),
-            draft.TrackSpec(draft.TrackType.audio, BGM_TRACK),
-        ]
-    )
+    tracks = [draft.TrackSpec(draft.TrackType.video, VIDEO_TRACK)]
+    track_names_in_order = [VIDEO_TRACK]
+    if phase == "voice":
+        tracks.append(draft.TrackSpec(draft.TrackType.text, VOICE_TRACK))
+        track_names_in_order.append(VOICE_TRACK)
+    else:
+        tracks.append(draft.TrackSpec(draft.TrackType.audio, ALIGNED_AUDIO_TRACK))
+        track_names_in_order.append(ALIGNED_AUDIO_TRACK)
+    tracks.append(draft.TrackSpec(draft.TrackType.audio, BGM_TRACK))
+    track_names_in_order.append(BGM_TRACK)
+    script.append_tracks(tracks)
 
     for item in merge_video_items(copied):
         start, duration = seconds_range(item)
@@ -212,37 +237,28 @@ def create_draft(
             segment.add_keyframe(draft.KeyframeProperty.position_x, duration, 0.025)
         script.add_segment(segment, VIDEO_TRACK)
 
-    for item in copied:
-        start, duration = seconds_range(item)
-        caption = draft.TextSegment(
-            str(item["text"]),
-            draft.trange(start, duration),
-            style=draft.TextStyle(
-                size=6.0,
-                color=(1.0, 1.0, 1.0),
-                align=1,
-                auto_wrapping=True,
-                max_line_width=0.82,
-            ),
-            clip_settings=draft.ClipSettings(transform_y=-0.72),
-            shadow=draft.TextShadow(
-                color=(0.0, 0.0, 0.0),
-                alpha=0.9,
-                diffuse=15.0,
-                distance=5.0,
-                angle=-45.0,
-            ),
+    if phase == "voice":
+        # Intentionally keep only one narration text segment. Short caption
+        # segments are deferred so Jianying cannot accidentally create seven
+        # overlapping TTS clips from the subtitle track.
+        narration = draft.TextSegment(
+            narration_text,
+            draft.trange("0s", f"{float(timeline['duration']):.3f}s"),
+            style=draft.TextStyle(size=1.0, alpha=0.0, align=1),
+            clip_settings=draft.ClipSettings(alpha=0.0),
         )
-        caption.font = SimpleNamespace(resource_id=CHIYUN_LI_BOLD_RESOURCE_ID)
-        script.add_segment(caption, SUBTITLE_TRACK)
-
-    narration = draft.TextSegment(
-        narration_text,
-        draft.trange("0s", f"{float(timeline['duration']):.3f}s"),
-        style=draft.TextStyle(size=1.0, alpha=0.0, align=1),
-        clip_settings=draft.ClipSettings(alpha=0.0),
-    )
-    script.add_segment(narration, VOICE_TRACK)
+        script.add_segment(narration, VOICE_TRACK)
+    else:
+        assert audio_file is not None
+        audio_target = (
+            draft_path / "assets" / f"complete-narration{audio_file.suffix.lower()}"
+        )
+        shutil.copy2(audio_file, audio_target)
+        audio = draft.AudioSegment(
+            str(audio_target.resolve()),
+            draft.trange("0s", f"{float(timeline['duration']):.3f}s"),
+        )
+        script.add_segment(audio, ALIGNED_AUDIO_TRACK)
     script.save()
 
     meta_path = draft_path / "draft_meta_info.json"
@@ -276,7 +292,8 @@ def create_draft(
     content = json.loads(content_path.read_text(encoding="utf-8"))
     tracks = content.get("tracks", [])
     track_names = {track.get("name") for track in tracks}
-    required_tracks = {VIDEO_TRACK, VOICE_TRACK, SUBTITLE_TRACK, BGM_TRACK}
+    required_tracks = {VIDEO_TRACK, BGM_TRACK}
+    required_tracks.add(VOICE_TRACK if phase == "voice" else ALIGNED_AUDIO_TRACK)
     if not required_tracks.issubset(track_names):
         missing = sorted(required_tracks - track_names)
         raise RuntimeError(f"草稿结构校验失败，缺少轨道：{missing}")
@@ -288,18 +305,23 @@ def create_draft(
         "platform": target_platform,
         "draft_format": draft_format,
         "content_file": content_filename,
+        "phase": phase,
         "package_dir": str(package_dir.resolve()),
         "width": 1080,
         "height": 1920,
         "duration": float(timeline["duration"]),
         "video_segments": len(merge_video_items(copied)),
-        "subtitle_segments": len(copied),
-        "tracks": [VIDEO_TRACK, VOICE_TRACK, SUBTITLE_TRACK, BGM_TRACK],
+        "subtitle_segments": 0,
+        "tracks": track_names_in_order,
         "validation": {
             "json_structure": "passed",
             "jianying_open": "pending",
         },
-        "instruction": "在01连续旁白轨执行文本朗读；在03舒缓BGM轨添加剪映内授权音乐。",
+        "instruction": (
+            "只选中01连续旁白，选择推荐音色后整段朗读一次；不要生成短字幕配音。"
+            if phase == "voice"
+            else "完整旁白已写入；打开草稿后对01音频执行识别字幕，再添加授权BGM。"
+        ),
     }
     manifest_path = package_dir / "jianying_draft.json"
     manifest_path.write_text(
@@ -331,6 +353,9 @@ def main() -> None:
         args.replace,
         target_platform,
         draft_format,
+        args.phase,
+        args.timeline_file.expanduser().resolve() if args.timeline_file else None,
+        args.audio_file.expanduser().resolve() if args.audio_file else None,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
