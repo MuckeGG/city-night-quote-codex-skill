@@ -149,7 +149,10 @@ def estimate_segments(
         shot_totals: dict[int, float] = {}
         for item in expanded:
             shot_totals[item["shot_id"]] = shot_totals.get(item["shot_id"], 0) + item["duration"]
-        base_durations = [shot_totals[item["shot_id"]] / max(1, sum(x["text"] == item["text"] for x in expanded)) for item in expanded]
+        shot_piece_counts: dict[int, int] = {}
+        for item in expanded:
+            shot_piece_counts[item["shot_id"]] = shot_piece_counts.get(item["shot_id"], 0) + 1
+        base_durations = [shot_totals[item["shot_id"]] / shot_piece_counts[item["shot_id"]] for item in expanded]
     total = sum(base_durations)
     scale = (target_duration / total) if target_duration and total else 1.0
     result: list[Segment] = []
