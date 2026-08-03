@@ -11,10 +11,11 @@ Codex 负责来源核对、脚本、分镜、ImageGen 生图、字幕和时间�
   → 核对官方来源
   → 旁白与分镜
   → ImageGen 逐镜生图
-  → SRT 与时间轴
-  → 自动创建剪映草稿
-  → 在剪映中打开验收
-  → 文本朗读 + 授权 BGM
+  → 初版 SRT 与画面时间轴
+  → 创建“整段朗读”首稿
+  → 剪映一次性朗读完整文稿
+  → 读取真实音频时长并创建音画同步版
+  → 剪映从完整音频识别字幕 + 添加授权 BGM
 ```
 
 设计参考了 [today-dungeon-studio](https://github.com/MuckeGG/today-dungeon-studio) 的阶段化创作流程，以及 [Hamburgerai 的 Codex 视频制作复盘](https://x.com/Hamburgerai/status/2083419087246664038) 中三条经验：数据和构建器分离、系统差异显式处理、验收最终交付物而不是中间文件。
@@ -64,23 +65,50 @@ python -m pip install -r requirements.txt
 
 > 使用 city-night-quote-codex-skill，生成一集广州城市夜读，并直接创建剪映草稿。
 
-## 单独创建草稿
+## 音画同步的两阶段草稿
 
 前提是内容包已经包含 `timeline.json`、`narration.txt` 和镜头图片。
 
-### macOS
+第一阶段只生成一条完整旁白文本，不创建短字幕轨。因此在剪映中不会再误选七条短字幕、生成七段断续配音。
+
+### 1. 创建整段朗读首稿
 
 ```bash
 python scripts/create_jianying_draft.py \
   --package-dir /absolute/path/to/outputs/guangzhou-episode \
+  --phase voice \
   --title "广州夜读｜灯火照见认真生活的人"
 ```
 
-### Windows PowerShell
+Windows PowerShell 使用相同参数，只需改为 Windows 路径和续行符。
+
+打开首稿，只选中 `01 连续旁白（整段朗读一次）`，选择音色后执行一次“文本朗读”。不要创建短字幕配音。
+
+### 2. 读取真实配音并创建最终草稿
+
+```bash
+python scripts/align_jianying_voice.py \
+  --package-dir /absolute/path/to/outputs/guangzhou-episode \
+  --source-draft "/absolute/path/to/剪映草稿/广州夜读｜灯火照见认真生活的人"
+
+python scripts/create_jianying_draft.py \
+  --package-dir /absolute/path/to/outputs/guangzhou-episode \
+  --phase final \
+  --timeline-file /absolute/path/to/outputs/guangzhou-episode/timeline-aligned.json \
+  --audio-file /absolute/path/to/outputs/guangzhou-episode/audio/complete-narration.wav \
+  --title "广州夜读｜音画同步版"
+```
+
+打开“音画同步版”，对 `01 完整旁白（已按真实时长）` 执行“识别字幕/歌词”。字幕时间由真实语音识别生成，比按字数估算更准确，也不破坏整段朗读的连贯性。
+
+音频扩展名以 `audio-alignment-report.json` 的 `audio_output` 为准：不同剪映版本可能输出 WAV 或 MP3，脚本会保留真实格式。
+
+### Windows PowerShell 示例
 
 ```powershell
 python scripts/create_jianying_draft.py `
   --package-dir "C:\absolute\path\to\outputs\guangzhou-episode" `
+  --phase voice `
   --title "广州夜读｜灯火照见认真生活的人"
 ```
 
@@ -92,12 +120,19 @@ python scripts/create_jianying_draft.py `
 
 “首页出现标题”不等于草稿有效。每次生成后至少检查：
 
-1. 草稿入口文件能解析，轨道数、时长、画面段和字幕段正确。
+1. 草稿入口文件能解析，轨道数、时长和画面段正确。
 2. 剪映能真正进入编辑时间线，不能出现“草稿已损坏”。
 3. 点击画面片段后预览区能显示图片，不能出现“暂无访问权限”或“链接媒体”。
-4. 旁白文本轨完整，字幕轨和画面轨时间正确。
+4. 朗读首稿的 `textReading` 中只有一个音频；最终草稿只有一条完整旁白音频。
+5. 最终字幕由完整音频识别生成，播放抽查时文字切换与声音一致。
 
-当前 macOS 实机验证：1080×1920、32 秒、5 个画面段、7 条字幕，能进入时间线并显示草稿内图片。
+## 音色建议
+
+- 默认：`云泽大叔`。温和、可信、有生活阅历，适合城市夜读和中老年用户，但不会过分像官方新闻播音。
+- 更克制、更有文化感：`自然纪录片`。
+- 更柔和、偏陪伴感：`真人播客女`。
+
+不建议使用“真人新闻主播”等强官方感音色，以免让原创栏目看起来像官方媒体配音或背书。剪映音色名称可能随版本变化；找不到同名音色时，选择“自然、舒缓、普通话清晰”的通用声音。
 
 ## 常见问题
 
@@ -117,10 +152,13 @@ Skill 代码可以通过 GitHub 重新安装；单集草稿仍包含本机绝对
 
 这是刻意保留的交付边界：旁白在剪映执行“文本朗读”，BGM 使用剪映内授权音乐，避免伪造官方播音员声音和不明版权音乐。
 
+### 为什么检测到“应当只有 1 段，实际有多段”
+
+说明在旧草稿中对短字幕逐条执行了朗读。多段配音不仅有停顿，还会让估算字幕逐渐漂移。删除该首稿并重新运行 `--phase voice`，只对唯一的完整旁白文本执行一次朗读。
+
 ## 内容与版权
 
 - 官方媒体内容只使用经过核对的短摘录，并保留来源记录；商业化前优先改为原创转述或取得授权。
 - 不生成人民日报、央视新闻的 Logo、台标、仿官方新闻包装或播音员克隆音色。
 - AI 城市画面应按平台规则标注，不能冒充实时航拍、实时天气或新闻现场。
 - BGM 使用剪映平台授权或明确可商用音乐。
-
