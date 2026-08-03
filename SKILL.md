@@ -27,8 +27,8 @@ description: Create reusable city-night quote videos with verified official-sour
 6. **图片提示词**：为每个镜头写完整的中文 image-gen prompt，包含主体、动作、环境、镜头、构图、光线、色调、竖屏画幅和负面约束。输出 `image-prompts.md`。
 7. **image-gen**：调用内置 `image_gen`，逐镜头生成图片。保持同一城市、地标特征、季节、时间段和视觉风格一致；避免图片出现文字、字幕、Logo、水印或伪造的实时新闻信息。生成后检查并把最终图片保存到 `assets/shot-XX.png`。
 8. **字幕与时间轴**：使用 `scripts/build_subtitles.py` 根据旁白和目标时长生成初版 `subtitles.srt`、`timeline.csv` 和 `timeline.json`。字幕按自然句意分段，不按每个镜头机械断句。
-9. **剪映草稿**：读取 `references/jianying-draft.md`，运行 `scripts/create_jianying_draft.py`，将草稿直接写入本机剪映草稿目录。不要通过界面逐张导入和手工剪辑。输出 `jianying_draft.json`，并保留 `capcut_handoff.md` 作为人工交接备份。
-10. **验收**：运行 `scripts/validate_content_package.py`，再检查草稿的画布为1080×1920、总时长正确、视频段数量等于去重后的 `shot_id` 数、字幕段数量等于时间轴条目数。若本机装有剪映，确认首页能看到草稿标题；不要为了验证而手工重建时间线。
+9. **剪映草稿**：读取 `references/jianying-draft.md`，运行 `scripts/create_jianying_draft.py`，自动识别 Windows/macOS 和新旧草稿入口，将草稿直接写入本机剪映草稿目录。素材必须复制进草稿内部 `assets/`，不要通过界面逐张导入和手工剪辑。输出 `jianying_draft.json`，并保留 `capcut_handoff.md` 作为人工交接备份。
+10. **验收**：运行 `scripts/validate_content_package.py`，再检查草稿的画布为1080×1920、总时长正确、视频段数量等于去重后的 `shot_id` 数、字幕段数量等于时间轴条目数。若本机装有剪映，必须真正打开草稿并进入时间线，再点击一个画面片段确认预览正常；仅在首页看到标题不算通过。不要为了验证而手工重建时间线。
 
 ## 固定输出结构
 
