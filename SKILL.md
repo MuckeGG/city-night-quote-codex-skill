@@ -10,8 +10,8 @@ description: Create reusable city-night quote videos with verified official-sour
 ## 交付边界
 
 - 在 Codex 中完成选题、来源核对、脚本、分镜、图片提示词、image-gen生图、字幕、时间轴和发布文案。
-- 默认直接写入剪映草稿目录，创建9:16可编辑草稿。草稿必须含画面轨、连续旁白文本轨、屏幕字幕轨和空BGM轨。
-- 将配音和BGM留在剪映：连续旁白轨供用户执行文本朗读，BGM轨供用户添加剪映内授权音乐。不要在 Codex 中伪造剪映配音。
+- 默认直接写入剪映草稿目录，创建9:16可编辑草稿。先创建只有一条完整旁白文本的“朗读首稿”，取得真实音频后再创建“音画同步版”。
+- 将配音和BGM留在剪映：完整旁白只执行一次文本朗读；最终字幕用剪映对这条完整音频执行“识别字幕/歌词”。不要在 Codex 中伪造剪映配音。
 - 使用内置 `image_gen` 生成位图素材；每个关键镜头单独生成并保存到当前内容包的 `assets/` 目录。不要改用外部API或自行编写图片生成客户端。
 - 不生成冒充人民日报、央视新闻或播音员的Logo、台标、声音、新闻包装或官方背书。
 
@@ -26,9 +26,11 @@ description: Create reusable city-night quote videos with verified official-sour
 5. **分镜**：为每段旁白固定 `shot_id`、画面内容、景别、机位、动作、光线、情绪和时长。分镜中的旁白原文不可改写、遗漏、合并或调换。输出 `storyboard.md` 和机器可读的 `shots.json`。
 6. **图片提示词**：为每个镜头写完整的中文 image-gen prompt，包含主体、动作、环境、镜头、构图、光线、色调、竖屏画幅和负面约束。输出 `image-prompts.md`。
 7. **image-gen**：调用内置 `image_gen`，逐镜头生成图片。保持同一城市、地标特征、季节、时间段和视觉风格一致；避免图片出现文字、字幕、Logo、水印或伪造的实时新闻信息。生成后检查并把最终图片保存到 `assets/shot-XX.png`。
-8. **字幕与时间轴**：使用 `scripts/build_subtitles.py` 根据旁白和目标时长生成初版 `subtitles.srt`、`timeline.csv` 和 `timeline.json`。字幕按自然句意分段，不按每个镜头机械断句。
-9. **剪映草稿**：读取 `references/jianying-draft.md`，运行 `scripts/create_jianying_draft.py`，自动识别 Windows/macOS 和新旧草稿入口，将草稿直接写入本机剪映草稿目录。素材必须复制进草稿内部 `assets/`，不要通过界面逐张导入和手工剪辑。输出 `jianying_draft.json`，并保留 `capcut_handoff.md` 作为人工交接备份。
-10. **验收**：运行 `scripts/validate_content_package.py`，再检查草稿的画布为1080×1920、总时长正确、视频段数量等于去重后的 `shot_id` 数、字幕段数量等于时间轴条目数。若本机装有剪映，必须真正打开草稿并进入时间线，再点击一个画面片段确认预览正常；仅在首页看到标题不算通过。不要为了验证而手工重建时间线。
+8. **初版时间轴**：使用 `scripts/build_subtitles.py` 根据旁白和目标时长生成初版 `subtitles.srt`、`timeline.csv` 和 `timeline.json`。这些时间只用于首稿画面排布，不声称已与配音精确同步。
+9. **朗读首稿**：读取 `references/jianying-draft.md`，运行 `scripts/create_jianying_draft.py --phase voice`。首稿只含画面、一条不可见的完整旁白文本和空BGM轨；不得放入短字幕文本轨，防止误选后生成多段配音。在剪映中选择合适音色，对完整旁白执行一次文本朗读。
+10. **真实音频回填**：运行 `scripts/align_jianying_voice.py`。脚本必须验证 `textReading/` 只有一个音频文件，读取真实时长，按剪映实际格式输出 `audio/complete-narration.<ext>`、`timeline-aligned.json` 和 `audio-alignment-report.json`。若检测到多个文件，停止并重新制作朗读首稿，不得拼接短字幕配音冒充连续朗读。
+11. **音画同步版**：运行 `scripts/create_jianying_draft.py --phase final --timeline-file timeline-aligned.json --audio-file audio/complete-narration.<ext>`，创建带一条完整旁白音频的最终草稿。打开后对该音频执行剪映“识别字幕/歌词”，让字幕时间点直接来自真实语音；再统一设置字幕样式并添加授权BGM。
+12. **验收**：运行 `scripts/validate_content_package.py`，确认1080×1920、只有一条连续旁白音频、画面覆盖完整真实音频时长、识别字幕无明显错字或重叠。若本机装有剪映，必须真正进入最终草稿时间线并播放抽查；仅在首页看到标题不算通过。
 
 ## 固定输出结构
 
@@ -43,11 +45,14 @@ outputs/<city>-<date>-<slug>/
 ├── subtitles.srt
 ├── timeline.csv
 ├── timeline.json
+├── timeline-aligned.json
+├── audio-alignment-report.json
 ├── source-ledger.csv
 ├── publish-copy.md
 ├── capcut_handoff.md
 ├── jianying_draft.json
 ├── jianying_assets/
+├── audio/
 └── assets/
 ```
 
@@ -72,4 +77,4 @@ outputs/<city>-<date>-<slug>/
 - 读取 `references/storyboard-and-imagegen.md` 生成城市夜景分镜和 image-gen 提示词。
 - 读取 `references/source-and-rights.md` 处理官方来源、短摘录、商业化和AI标识。
 - 读取 `references/jianying-draft.md` 直接创建和验证可编辑剪映草稿。
-- 读取 `references/capcut-handoff.md` 生成剪映交接包和可选的真实音频校准输入。
+- 读取 `references/capcut-handoff.md` 生成剪映交接包并完成真实音频校准。
