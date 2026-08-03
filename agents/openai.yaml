@@ -1,0 +1,7 @@
+interface:
+  display_name: "城市夜读短视频制作"
+  short_description: "官方金句与城市夜景的Codex内容包工作流"
+  default_prompt: "Use $city-night-quote-codex-skill to create a complete city-night quote video package with image-gen assets and CapCut-ready subtitles."
+
+policy:
+  allow_implicit_invocation: true
