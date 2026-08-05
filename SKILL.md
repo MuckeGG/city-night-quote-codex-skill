@@ -31,6 +31,7 @@ description: Create reusable city-night quote videos with verified official-sour
 10. **真实音频回填**：运行 `scripts/align_jianying_voice.py`。脚本必须验证 `textReading/` 只有一个音频文件，读取真实时长，按剪映实际格式输出 `audio/complete-narration.<ext>`、`timeline-aligned.json` 和 `audio-alignment-report.json`。若检测到多个文件，停止并重新制作朗读首稿，不得拼接短字幕配音冒充连续朗读。
 11. **音画同步版**：运行 `scripts/create_jianying_draft.py --phase final --timeline-file timeline-aligned.json --audio-file audio/complete-narration.<ext>`，创建带一条完整旁白音频的最终草稿。打开后对该音频执行剪映“识别字幕/歌词”，让字幕时间点直接来自真实语音；再统一设置字幕样式并添加授权BGM。
 12. **验收**：运行 `scripts/validate_content_package.py`，确认1080×1920、只有一条连续旁白音频、画面覆盖完整真实音频时长、识别字幕无明显错字或重叠。若本机装有剪映，必须真正进入最终草稿时间线并播放抽查；仅在首页看到标题不算通过。
+13. **视频号文案**：最终草稿完成并验收后，必须生成 `publish-copy.md`。正文写成可直接发布的视频号文案：先用一句城市/地标情绪钩子吸引本地用户，再用2–4句承接视频主题，结尾自然邀请转发或送给某人，并注明“画面为AI生成”。正文之后单独输出恰好5个 `#话题`，不得少于或多于5个。话题优先覆盖城市、地标、栏目、情绪和目标人群，不使用夸大流量承诺。
 
 ## 固定输出结构
 
@@ -63,6 +64,7 @@ outputs/<city>-<date>-<slug>/
 - 生成的城市画面必须标注“AI生成画面”或使用平台提供的AI标识；不把AI想象图描述为真实航拍、实时天气或真实现场。
 - BGM由用户在剪映中选择平台授权或可商用音乐。旁白优先，BGM不得覆盖人声。
 - 养生书、健康商品和商家广告不得使用疾病治疗、保证效果或虚假本地事实表述。
+- 视频号文案保持自然、克制，不写“一条轻松十万播放”“官方推荐”“必火”等无法保证的营销承诺。5个话题须与本集城市和内容直接相关。
 
 ## 何时需要用户确认
 
