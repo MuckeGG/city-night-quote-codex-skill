@@ -1,7 +1,7 @@
 interface:
   display_name: "城市夜读短视频制作"
-  short_description: "生成城市夜读内容包与可编辑剪映草稿"
-  default_prompt: "Use $city-night-quote-codex-skill to create a complete city-night quote episode with image-gen assets, subtitles, and a directly generated editable Jianying draft."
+  short_description: "生成城市夜读、剪映草稿与视频号文案"
+  default_prompt: "Use $city-night-quote-codex-skill to create a complete city-night quote episode with image-gen assets, subtitles, an editable Jianying draft, and a WeChat Channels caption with exactly five hashtags."
 
 policy:
   allow_implicit_invocation: true
