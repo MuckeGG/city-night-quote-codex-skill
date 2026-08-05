@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 TIME_RE = re.compile(r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})$")
+HASHTAG_RE = re.compile(r"(?<!\S)#[^\s#]+")
 
 
 def parse_time(value: str) -> float:
@@ -75,6 +76,23 @@ def validate_csv(path: Path) -> list[str]:
     return errors
 
 
+def validate_wechat_channels_copy(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    errors: list[str] = []
+    if "# 视频号发布文案" not in text:
+        errors.append("publish-copy.md is missing the WeChat Channels heading")
+    if "画面为AI生成" not in text and "AI生成画面" not in text:
+        errors.append("publish-copy.md is missing the AI-generated visual disclosure")
+    hashtags = HASHTAG_RE.findall(text)
+    if len(hashtags) != 5:
+        errors.append(
+            f"publish-copy.md must contain exactly 5 hashtags, found {len(hashtags)}"
+        )
+    if len(set(hashtags)) != len(hashtags):
+        errors.append("publish-copy.md contains duplicate hashtags")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("package_dir", type=Path)
@@ -92,6 +110,7 @@ def main() -> int:
         "timeline.json",
         "source-ledger.csv",
         "capcut_handoff.md",
+        "publish-copy.md",
     ]
     errors = [f"missing file: {name}" for name in required if not (root / name).is_file()]
     assets = [p for p in (root / "assets").glob("*") if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}] if (root / "assets").is_dir() else []
@@ -109,6 +128,8 @@ def main() -> int:
         for row in rows:
             if not row.get("source_name") or not row.get("usage_mode"):
                 errors.append("source-ledger.csv has a row without source_name or usage_mode")
+    if (root / "publish-copy.md").is_file():
+        errors.extend(validate_wechat_channels_copy(root / "publish-copy.md"))
     disclosure_files = [root / "capcut_handoff.md", root / "publish-copy.md"]
     if not any(path.is_file() and "AI生成" in path.read_text(encoding="utf-8") for path in disclosure_files):
         errors.append("missing AI-generated content disclosure")
